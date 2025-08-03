@@ -16,7 +16,7 @@ jobs:
         with:
           kernel-url: https://github.com/redmi-mt6765-dev/kernel
           kernel-dir: kernel
-          kernel-branch: rebase
+          kernel-branch: android-q
           config: dandelion_defconfig
           arch: arm64
           aosp-gcc: true
