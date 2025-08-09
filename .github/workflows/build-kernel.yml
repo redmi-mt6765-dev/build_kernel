@@ -75,12 +75,15 @@ jobs:
           export CCACHE_DIR="$HOME/.ccache"
           export CC="ccache clang"
 
+         # Run defconfig
           make O=out ARCH=arm64 dandelion_defconfig
 
+         # Build kernel
           make -j$(nproc) O=out \
             ARCH=arm64 \
+            CC=clang \
             LLVM=1 \
-            CLANG_TRIPLE=aarch64-linux-android- \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-android- \
             CROSS_COMPILE_ARM32=arm-linux-androideabi-
 
