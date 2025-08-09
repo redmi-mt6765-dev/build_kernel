@@ -6,11 +6,12 @@ on:
 jobs:
   Build-Kernel:
     runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ github.runner }}
 
     steps:
-
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Set up build environment (apt packages)
         run: |
@@ -47,8 +48,8 @@ jobs:
           # Clang
           clang_archive="clang-r353983c.tar.gz"
           wget -q -O "$clang_archive" "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android10-release/clang-r353983c.tar.gz"
-          mkdir -p clang-r353983c
-          tar -xzf "$clang_archive" -C clang-r353983c --strip-components=1
+          mkdir -p $HOME/toolchains/clang-r353983c
+          tar --strip-components=1 -xvzf clang-r353983c.tar.gz -C $HOME/toolchains/clang-r353983c
           rm -f "$clang_archive"
 
       # Restore ccache
@@ -66,12 +67,10 @@ jobs:
           git clone --branch dandelion-q-oss --single-branch https://github.com/redmi-mt6765-dev/kernel.git android-kernel
 
       - name: Compile kernel source
-        env:
-          HOME_TOOLCHAINS: ${{ runner.home }}/toolchains
         run: |
           cd android-kernel
 
-          export PATH="$HOME_TOOLCHAINS/clang-r353983c/bin:$PATH"
+          export PATH="$HOME/toolchains/clang-r353983c/bin:$PATH"
           export CCACHE_DIR="$HOME/.ccache"
           export CC="ccache clang"
 
@@ -79,14 +78,14 @@ jobs:
           make O=out ARCH=arm64 dandelion_defconfig
 
           # Build
-          make -j$(nproc) O=out \
+          make -j$(nproc --all) O=out \
             ARCH=arm64 \
             CC=clang \
             LD=ld.lld \
             LLVM=1 \
             CLANG_TRIPLE=aarch64-linux-gnu- \
-            CROSS_COMPILE=aarch64-linux-android- \
-            CROSS_COMPILE_ARM32=arm-linux-androideabi-
+            CROSS_COMPILE= \
+            CROSS_COMPILE_ARM32=
 
       - name: List final kernel outputs
         run: |
