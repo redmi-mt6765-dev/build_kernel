@@ -9,7 +9,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: ${{ github.runner }}
+        working-directory: /home/runner
 
     steps:
 
