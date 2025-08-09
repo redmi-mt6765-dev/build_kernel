@@ -75,10 +75,10 @@ jobs:
           export CCACHE_DIR="$HOME/.ccache"
           export CC="ccache clang"
 
-         # Run defconfig
+          # Run defconfig
           make O=out ARCH=arm64 dandelion_defconfig
 
-         # Build kernel
+          # Build kernel
           make -j$(nproc) O=out \
             ARCH=arm64 \
             CC=clang \
