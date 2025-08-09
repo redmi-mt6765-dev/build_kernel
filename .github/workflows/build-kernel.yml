@@ -71,7 +71,7 @@ jobs:
         run: |
           cd android-kernel
 
-          export PATH="$HOME_TOOLCHAINS/clang-r353983c/bin:$HOME_TOOLCHAINS/aarch64-linux-android-4.9/bin:$HOME_TOOLCHAINS/arm-linux-androideabi-4.9/bin:$PATH"
+          export PATH="$HOME_TOOLCHAINS/clang-r353983c/bin:$PATH"
           export CCACHE_DIR="$HOME/.ccache"
           export CC="ccache clang"
 
