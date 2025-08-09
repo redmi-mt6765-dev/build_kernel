@@ -6,40 +6,94 @@ on:
 jobs:
   Build-Kernel:
     runs-on: ubuntu-22.04
-    defaults:
-      run:
-        shell: bash
-        working-directory: /home/runner
 
     steps:
 
-      - name: Set up build environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install git ccache automake flex lzop bison gperf build-essential zip curl zlib1g-dev g++-multilib libxml2-utils bzip2 libbz2-dev libbz2-1.0 libghc-bzlib-dev squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng maven libssl-dev pwgen libswitch-perl policycoreutils minicom libxml-sax-base-perl libxml-simple-perl bc libc6-dev-i386 lib32ncurses5-dev libx11-dev lib32z-dev libgl1-mesa-dev xsltproc unzip device-tree-compiler python2 python3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Clone and download toolchains
+      - name: Set up build environment (apt packages)
         run: |
-          mkdir toolchains
-          cd toolchains
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            git ccache automake flex lzop bison gperf build-essential zip curl \
+            zlib1g-dev g++-multilib libxml2-utils bzip2 libbz2-dev squashfs-tools \
+            pngcrush schedtool dpkg-dev liblz4-tool optipng maven libssl-dev \
+            pwgen policycoreutils minicom libxml-sax-base-perl libxml-simple-perl \
+            bc libc6-dev-i386 lib32ncurses5-dev libncurses-dev libelf-dev libx11-dev \
+            lib32z-dev libgl1-mesa-dev xsltproc unzip device-tree-compiler \
+            python3 python3-distutils python3-pip python-is-python3 python2 \
+            wget tar
+          sudo ln -sf /usr/bin/python3 /usr/bin/python
+
+      # Restore toolchains from cache if available
+      - name: Cache toolchains
+        id: cache-toolchains
+        uses: actions/cache@v4
+        with:
+          path: ~/toolchains
+          key: toolchains-android10-r353983c
+
+      - name: Prepare toolchains
+        if: steps.cache-toolchains.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p "$HOME/toolchains"
+          cd "$HOME/toolchains"
+
+          # GCC
           git clone --branch android10-release --single-branch https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9
           git clone --branch android10-release --single-branch https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9
-          wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android10-release/clang-r353983c.tar.gz
-          mkdir clang-r353983c
-          tar -C clang-r353983c/ -zxvf clang-r353983c.tar.gz
-          cd ~
+
+          # Clang
+          clang_archive="clang-r353983c.tar.gz"
+          wget -q -O "$clang_archive" "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android10-release/clang-r353983c.tar.gz"
+          mkdir -p clang-r353983c
+          tar -xzf "$clang_archive" -C clang-r353983c --strip-components=1
+          rm -f "$clang_archive"
+
+      # Restore ccache
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ github.ref }}-
+            ccache-
 
       - name: Clone kernel source
-        run: git clone --branch dandelion-q-oss --single-branch https://github.com/redmi-mt6765-dev/kernel.git android-kernel
+        run: |
+          git clone --branch dandelion-q-oss --single-branch https://github.com/redmi-mt6765-dev/kernel.git android-kernel
 
       - name: Compile kernel source
+        env:
+          HOME_TOOLCHAINS: ${{ runner.home }}/toolchains
         run: |
           cd android-kernel
+
+          export PATH="$HOME_TOOLCHAINS/clang-r353983c/bin:$HOME_TOOLCHAINS/aarch64-linux-android-4.9/bin:$HOME_TOOLCHAINS/arm-linux-androideabi-4.9/bin:$PATH"
+          export CCACHE_DIR="$HOME/.ccache"
+          export CC="ccache clang"
+
           make O=out ARCH=arm64 dandelion_defconfig
-          PATH="$HOME/toolchains/clang-r353983c/bin:$HOME/toolchains/aarch64-linux-gnu/bin:$HOME/toolchains/arm-linux-androideabi/bin:${PATH}" \
-          make -j$(nproc --all) O=out \
-                      ARCH=arm64 \
-                      CC=clang \
-                      CLANG_TRIPLE=aarch64-linux-gnu- \
-                      CROSS_COMPILE=aarch64-linux-android- \
-                      CROSS_COMPILE_ARM32=arm-linux-androideabi-
+
+          make -j$(nproc) O=out \
+            ARCH=arm64 \
+            LLVM=1 \
+            CLANG_TRIPLE=aarch64-linux-android- \
+            CROSS_COMPILE=aarch64-linux-android- \
+            CROSS_COMPILE_ARM32=arm-linux-androideabi-
+
+      - name: List final kernel outputs
+        run: |
+          echo "=== Boot output ==="
+          ls -lh out/arch/arm64/boot || true
+
+      - name: Upload kernel image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-image
+          path: |
+            out/arch/arm64/boot/Image.gz-dtb
+            out/arch/arm64/boot/dtb
+          if-no-files-found: error
